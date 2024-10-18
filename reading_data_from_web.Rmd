@@ -1,0 +1,134 @@
+---
+title: "reading_data_from_web"
+author: "Yingyu Cui"
+date: "2024-10-18"
+output: github_document
+---
+
+```{r setup and figure preferrences}
+library(tidyverse)
+
+library(rvest)
+library(httr)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+## Scrape a table from a webpage
+I want the first table from [this page](https://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm)
+
+read in the html
+```{r read the html}
+url = "https://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+
+drug_use_html = read_html(url)
+```
+
+extract the table, but only focus on the first one
+```{r extract the table}
+table_marj =
+  drug_use_html |> 
+  html_table() |> 
+  first() |> 
+  slice(-1) |> 
+  as_tibble()
+table_marj
+```
+
+assessment1
+most the cases, we should add the header = TRUE to the html_table() function to get the correct table. 
+```{r assessment1 html read}
+url1 = "https://www.bestplaces.net/cost_of_living/city/new_york/new_york"
+
+NYC_cost_html = read_html(url1)
+```
+```{r assessment1 extract the table}
+table_NYC_cost = 
+  NYC_cost_html |> 
+  html_table (header = TRUE) |> 
+  first()
+```
+
+
+## star war movies info
+
+I want some data from [here]("https://www.imdb.com/list/ls070150896/")
+```{r read the html}
+url2 = "https://www.imdb.com/list/ls070150896/"
+swm_html = read_html(url2)
+```
+
+get some elements from the page
+```{r extract the elements}
+title_vec = 
+  swm_html |>
+  html_elements(".ipc-title-link-wrapper .ipc-title__text") |>
+  html_text()
+
+metascore_vec = 
+  swm_html |>
+  html_elements(".metacritic-score-box") |>
+  html_text()
+
+runtime_vec = 
+  swm_html |>
+  html_elements(".dli-title-metadata-item:nth-child(2)") |>
+  html_text()
+
+swm_df = 
+  tibble(
+    title = title_vec,
+    score = metascore_vec,
+    runtime = runtime_vec)
+```
+
+assessment2
+```{r assessment2}
+url3 = "https://books.toscrape.com/"
+books_html = read_html(url3)
+
+titles = 
+  books_html |>
+  html_elements("h3") |>
+  html_text()
+
+stars = 
+  books_html |>
+  html_elements(".star-rating") |>
+  html_text()
+```
+
+## API functions
+request the server about some data 
+```{r data }
+nyc_water = 
+  GET("https://data.cityofnewyork.us/resource/ia2d-e54m.csv") |> 
+  content("parsed")
+```
+or we could use the json format
+```{r data2}
+nyc_water_json = 
+  GET("https://data.cityofnewyork.us/resource/ia2d-e54m.json") |> 
+  content("text") |> 
+  jsonlite::fromJSON() |>
+  as_tibble()
+```
+
+GET("https://chronicdata.cdc.gov/resource/acme-vg9e.csv",
+      query = list("$limit" = 5000))
+query function:
+about how many rows are requested from the server 
+
