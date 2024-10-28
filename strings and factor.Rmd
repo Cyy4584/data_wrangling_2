@@ -1,0 +1,208 @@
+---
+title: "strings and factor"
+author: "Yingyu Cui"
+date: "2024-10-27"
+output: github_document
+---
+
+```{r set up}
+library(tidyverse)
+library(rvest)
+library(p8105.datasets)
+```
+
+```{r search and replace strings}
+string_vec = c("my", "name", "is", "jeff")
+
+str_detect(string_vec, "jeff")
+# always in conj with "filter"
+
+str_replace(string_vec, "jeff", "Jeff")
+# always in conj with "mutate"
+
+# For exact matches, you can designate matches at the beginning or end of a line.
+string_vec = c(
+  "i think we all rule for participating",
+  "i think i have been caught",
+  "i think this will be quite fun actually",
+  "it will be fun, i think"
+  )
+
+str_detect(string_vec, "^i think")
+#pay attention to the ^
+str_detect(string_vec, "i think$")
+#pay attention to the $
+
+
+# designate a list of characters that will count as a match.
+string_vec = c(
+  "Time for a Pumpkin Spice Latte!",
+  "went to the #pumpkinpatch last weekend",
+  "Pumpkin Pie is obviously the best pie",
+  "SMASHING PUMPKINS -- LIVE IN CONCERT!!"
+  )
+
+str_detect(string_vec,"[Pp]umpkin")
+# which will match both "Pumpkin" and "pumpkin", just including is fine
+
+
+
+# provide a range of letters or numbers that count as a match.
+string_vec = c(
+  '7th inning stretch',
+  '1st half soon to begin. Texas won the toss.',
+  'she is 5 feet 4 inches tall',
+  '3AM - cant sleep :('
+  )
+
+str_detect(string_vec, "^[0-9][a-zA-Z]")
+# matches any string that starts with a number followed by a letter upper  and lower case
+# ^ means start of string
+
+
+#The character . matches anything.
+string_vec = c(
+  'Its 7:11 in the evening',
+  'want to go to 7-11?',
+  'my flight is AA711',
+  'NetBios: scanning ip 203.167.114.66'
+  )
+
+str_detect(string_vec, "7.11")
+# . means anything, but must have something in that position
+
+
+# if we want to matach "[" or "]", we need to begin with //
+string_vec = c(
+  'The CI is [2, 5]',
+  ':-]',
+  ':-[',
+  'I found the answer on pages [6-7]'
+  )
+
+str_detect(string_vec, "\\[")
+# [] always used to indicate some range in matching so we need to transfer them into "//["
+```
+Things about the factors
+```{r factors}
+# store categorical variables 
+# They can take on specific levels (e.g. male and female) which are usually presented as characters but are, in fact, stored by R as integers. 
+#but most of the time are hidden by easier-to-read character string labels
+
+vec_sex = factor(c("male", "male", "female", "female"))
+vec_sex
+
+as.numeric(vec_sex)
+# different levels are always stored as intergers, which could be transferred as number.
+ 
+vec_sex = fct_relevel(vec_sex, "male") # male should be put in the most front place
+vec_sex
+
+# Understanding how R coerces variables is important, because it sometimes happens unintentionally and can break your code or impact your analyses.
+
+```
+
+read data from a webpage and wrangle them 
+```{r web scraping}
+nsduh_url = "http://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+
+table_marj = 
+  read_html(nsduh_url) |> 
+  html_table() |> 
+  first() |>
+  slice(-1)
+
+
+# wrangle the data
+data_marj = 
+  table_marj |>
+  select(-contains("P Value")) |>
+  pivot_longer(
+    -State,
+    names_to = "age_year", 
+    values_to = "percent") |> 
+    separate(age_year, into = c("age", "year"), sep = "\\(") |> 
+  mutate(
+    year = str_replace(year, "\\)", ""),
+    percent = str_replace(percent, "[a-c]$", ""),
+    percent = as.numeric(percent)) |>
+  filter(!(State %in% c("Total U.S.", "Northeast", "Midwest", "South", "West")))
+
+# separate function and str_replace
+# filter function and str_detect
+
+
+# treat State as a factor are reorder according to the median percent value.
+data_marj |>
+  filter(age == "12-17") |> 
+  mutate(State = fct_reorder(State, percent)) |> 
+  ggplot(aes(x = State, y = percent, color = year)) + 
+    geom_point() + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# data |>  and data = are different
+# conj the function of fct_reorder and gglot x axis or y axis, which could put some factors in order on axis in plot
+
+```
+more application on NYC resterant
+```{r nyc restaurant}
+data("rest_inspec")
+
+rest_inspec |> 
+  group_by(boro, grade) |> 
+  summarize(n = n()) |> 
+  pivot_wider(names_from = grade, values_from = n)
+
+# summarize(n = n()) is to count the number of rows in each group
+
+# clean and filter the data
+rest_inspec =
+  rest_inspec |>
+  filter(grade %in% c("A", "B", "C"), boro != "Missing") |> 
+  mutate(boro = str_to_title(boro))
+
+rest_inspec |> 
+  filter(str_detect(dba, "Pizza"))
+# how to find "pizza" or "PIZZA" in dba
+# str_detect is case-sensitive until we tell it not to be
+
+rest_inspec |> 
+  filter(str_detect(dba, "[Pp][Ii][Zz][Zz][Aa]")) |> 
+  ggplot(aes(x = boro, fill = grade)) + 
+  geom_bar()
+# geom_bar() great could be used usually
+
+mutate(boro = fct_infreq(boro))
+# reorder the boro factor levels by frequency of occurrence from high to low, which is a easy way rather than reorder
+
+boro = str_replace(boro, "Manhattan", "The City"))
+# however, after this the order will get back to alphabetical order, so we need to reorder again.
+
+
+# Fortunately there is a dedicated function for renaming factor levels without changing the original sequence but change the name.
+mutate(
+    boro = fct_infreq(boro),
+    boro = fct_recode(boro, "The City" = "Manhattan"))
+
+
+
+### ggplot uses factor levels to determine the order in which categories appear.
+mutate(name = forcats::fct_relevel(name, c("Molokai_HI", "CentralPark_NY", "Waterhole_WA"))) 
+## there is difference between fct_relevel(by hand regulation) and fct_reorder(according to the value)
+mutate(name = forcats::fct_reorder(name, tmax)) 
+
+#Specifically, the ordering determines the “reference” category, and is something that can be adjusted as needed.
+# which is something about statistical comparison
+
+weather_df |>
+  mutate(name = forcats::fct_relevel(name, c("Molokai_HI", "CentralPark_NY", "Waterhole_WA"))) |> 
+  lm(tmax ~ name, data = _)
+# this ditermine which is the reference category in the linear model.
+
+# when arrange or group_by, we could factor(XX) to see the results
+
+```
+
+
+
+
+
